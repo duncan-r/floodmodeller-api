@@ -1,8 +1,0 @@
-
-
-
-
-
-Welcome to Flood Modeller API codespace!
-
-<-- Please navigate to demo/README.md to get started

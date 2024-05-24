@@ -25,7 +25,7 @@ from subprocess import Popen
 from typing import Callable
 
 import pandas as pd
-from tqdm import trange
+# from tqdm import trange
 
 from ._base import FMFile
 from .ief_flags import flags
@@ -360,102 +360,102 @@ class IEF(FMFile):
         """
         self._save(filepath)
 
-    def simulate(  # noqa: C901, PLR0912, PLR0913
-        self,
-        method: str = "WAIT",
-        raise_on_failure: bool = True,
-        precision: str = "DEFAULT",
-        enginespath: str = "",
-        range_function: Callable = trange,
-        range_settings: dict | None = None,
-    ) -> subprocess.Popen | None:
-        """Simulate the IEF file directly as a subprocess
+    # def simulate(  # noqa: C901, PLR0912, PLR0913
+        # self,
+        # method: str = "WAIT",
+        # raise_on_failure: bool = True,
+        # precision: str = "DEFAULT",
+        # enginespath: str = "",
+        # range_function: Callable = trange,
+        # range_settings: dict | None = None,
+    # ) -> subprocess.Popen | None:
+        # """Simulate the IEF file directly as a subprocess
 
-        Args:
-            method (str, optional): {'WAIT'} | 'RETURN_PROCESS'
-                'WAIT' - The function waits for the simulation to complete before continuing (This is default)
-                'RETURN_PROCESS' - The function sets the simulation running in background and immediately continues, whilst returning the process object.
-                Defaults to 'WAIT'.
-            raise_on_failure (bool, optional): If True, an exception will be raised if the simulation fails to complete without errors.
-                If set to False, then the script will continue to run even if the simulation fails. If 'method' is set to 'RETURN_PROCESS'
-                then this argument is ignored. Defaults to True.
-            precision (str, optional): {'DEFAULT'} | 'SINGLE' | 'DOUBLE'
-                Define which engine to use for simulation, if set to 'DEFAULT' it will use the precision specified in the IEF. Alternatively,
-                this can be overwritten using 'SINGLE' or 'DOUBLE'.
-            enginespath (str, optional): {''} | '/absolute/path/to/engine/executables'
-                Define where the engine executables are located. This replaces the default location (usual installation folder) if set to
-                anything other than ''.
+        # Args:
+            # method (str, optional): {'WAIT'} | 'RETURN_PROCESS'
+                # 'WAIT' - The function waits for the simulation to complete before continuing (This is default)
+                # 'RETURN_PROCESS' - The function sets the simulation running in background and immediately continues, whilst returning the process object.
+                # Defaults to 'WAIT'.
+            # raise_on_failure (bool, optional): If True, an exception will be raised if the simulation fails to complete without errors.
+                # If set to False, then the script will continue to run even if the simulation fails. If 'method' is set to 'RETURN_PROCESS'
+                # then this argument is ignored. Defaults to True.
+            # precision (str, optional): {'DEFAULT'} | 'SINGLE' | 'DOUBLE'
+                # Define which engine to use for simulation, if set to 'DEFAULT' it will use the precision specified in the IEF. Alternatively,
+                # this can be overwritten using 'SINGLE' or 'DOUBLE'.
+            # enginespath (str, optional): {''} | '/absolute/path/to/engine/executables'
+                # Define where the engine executables are located. This replaces the default location (usual installation folder) if set to
+                # anything other than ''.
 
-        Raises:
-            UserWarning: Raised if ief filepath not already specified
+        # Raises:
+            # UserWarning: Raised if ief filepath not already specified
 
-        Returns:
-            subprocess.Popen(): If method == 'RETURN_PROCESS', the Popen() instance of the process is returned.
-        """
-        try:
-            self._range_function = range_function
-            self._range_settings = range_settings if range_settings else {}
-            if self._filepath is None:
-                raise UserWarning(
-                    "IEF must be saved to a specific filepath before simulate() can be called.",
-                )
-            if precision.upper() == "DEFAULT":
-                precision = "SINGLE"  # Defaults to single...
-                for attr in dir(self):
-                    if (
-                        attr.upper() == "LAUNCHDOUBLEPRECISIONVERSION"  # Unless DP specified
-                        and int(getattr(self, attr)) == 1
-                    ):
-                        precision = "DOUBLE"
-                        break
+        # Returns:
+            # subprocess.Popen(): If method == 'RETURN_PROCESS', the Popen() instance of the process is returned.
+        # """
+        # try:
+            # self._range_function = range_function
+            # self._range_settings = range_settings if range_settings else {}
+            # if self._filepath is None:
+                # raise UserWarning(
+                    # "IEF must be saved to a specific filepath before simulate() can be called.",
+                # )
+            # if precision.upper() == "DEFAULT":
+                # precision = "SINGLE"  # Defaults to single...
+                # for attr in dir(self):
+                    # if (
+                        # attr.upper() == "LAUNCHDOUBLEPRECISIONVERSION"  # Unless DP specified
+                        # and int(getattr(self, attr)) == 1
+                    # ):
+                        # precision = "DOUBLE"
+                        # break
 
-            if enginespath == "":
-                _enginespath = r"C:\Program Files\Flood Modeller\bin"  # Default location
-            else:
-                _enginespath = enginespath
-                if not Path(_enginespath).exists():
-                    raise Exception(
-                        f"Flood Modeller non-default engine path not found! {str(_enginespath)}",
-                    )
+            # if enginespath == "":
+                # _enginespath = r"C:\Program Files\Flood Modeller\bin"  # Default location
+            # else:
+                # _enginespath = enginespath
+                # if not Path(_enginespath).exists():
+                    # raise Exception(
+                        # f"Flood Modeller non-default engine path not found! {str(_enginespath)}",
+                    # )
 
-            if precision.upper() == "SINGLE":
-                isis32_fp = str(Path(_enginespath, "ISISf32.exe"))
-            else:
-                isis32_fp = str(Path(_enginespath, "ISISf32_DoubleP.exe"))
+            # if precision.upper() == "SINGLE":
+                # isis32_fp = str(Path(_enginespath, "ISISf32.exe"))
+            # else:
+                # isis32_fp = str(Path(_enginespath, "ISISf32_DoubleP.exe"))
 
-            if not Path(isis32_fp).exists():
-                raise Exception(f"Flood Modeller engine not found! Expected location: {isis32_fp}")
+            # if not Path(isis32_fp).exists():
+                # raise Exception(f"Flood Modeller engine not found! Expected location: {isis32_fp}")
 
-            run_command = f'"{isis32_fp}" -sd "{self._filepath}"'
+            # run_command = f'"{isis32_fp}" -sd "{self._filepath}"'
 
-            if method.upper() == "WAIT":
-                print("Executing simulation...")
-                # execute simulation
-                process = Popen(run_command, cwd=os.path.dirname(self._filepath))
+            # if method.upper() == "WAIT":
+                # print("Executing simulation...")
+                # # execute simulation
+                # process = Popen(run_command, cwd=os.path.dirname(self._filepath))
 
-                # progress bar based on log files
-                self._init_log_file()
-                self._update_progress_bar(process)
+                # # progress bar based on log files
+                # self._init_log_file()
+                # self._update_progress_bar(process)
 
-                while process.poll() is None:
-                    # Process still running
-                    time.sleep(1)
+                # while process.poll() is None:
+                    # # Process still running
+                    # time.sleep(1)
 
-                result, summary = self._summarise_exy()
+                # result, summary = self._summarise_exy()
 
-                if result == 1 and raise_on_failure:
-                    raise RuntimeError(summary)
-                print(summary)
+                # if result == 1 and raise_on_failure:
+                    # raise RuntimeError(summary)
+                # print(summary)
 
-            elif method.upper() == "RETURN_PROCESS":
-                print("Executing simulation...")
-                # execute simulation
-                return Popen(run_command, cwd=os.path.dirname(self._filepath))
+            # elif method.upper() == "RETURN_PROCESS":
+                # print("Executing simulation...")
+                # # execute simulation
+                # return Popen(run_command, cwd=os.path.dirname(self._filepath))
 
-            return None
+            # return None
 
-        except Exception as e:
-            self._handle_exception(e, when="simulate")
+        # except Exception as e:
+            # self._handle_exception(e, when="simulate")
 
     def _get_result_filepath(self, suffix):
         if hasattr(self, "Results"):
@@ -581,37 +581,37 @@ class IEF(FMFile):
 
         print("No progress bar as " + reason + ". Simulation will continue as usual.")
 
-    def _update_progress_bar(self, process: Popen):
-        """Updates progress bar based on log file"""
+    # def _update_progress_bar(self, process: Popen):
+        # """Updates progress bar based on log file"""
 
-        # only if there is a log file
-        if self._lf is None:
-            return
+        # # only if there is a log file
+        # if self._lf is None:
+            # return
 
-        # tqdm progress bar
-        for i in self._range_function(100, **self._range_settings):
-            # Process still running
-            while process.poll() is None:
-                time.sleep(0.1)
+        # # tqdm progress bar
+        # for i in self._range_function(100, **self._range_settings):
+            # # Process still running
+            # while process.poll() is None:
+                # time.sleep(0.1)
 
-                # Find progress
-                self._lf.read(suppress_final_step=True)
-                progress = self._lf.report_progress()
+                # # Find progress
+                # self._lf.read(suppress_final_step=True)
+                # progress = self._lf.report_progress()
 
-                # Reached i% progress => move onto waiting for (i+1)%
-                if progress > i:
-                    break
+                # # Reached i% progress => move onto waiting for (i+1)%
+                # if progress > i:
+                    # break
 
-            # Process stopped
-            if process.poll() is not None:
-                # Find final progress
-                self._lf.read(suppress_final_step=True)
-                progress = self._lf.report_progress()
+            # # Process stopped
+            # if process.poll() is not None:
+                # # Find final progress
+                # self._lf.read(suppress_final_step=True)
+                # progress = self._lf.report_progress()
 
-                if progress > i:
-                    pass  # stopped because it completed
-                else:
-                    break  # stopped for another reason
+                # if progress > i:
+                    # pass  # stopped because it completed
+                # else:
+                    # break  # stopped for another reason
 
     def _summarise_exy(self):
         """Reads and summarises associated exy file if available"""
