@@ -50,5 +50,8 @@ setup(
         "tqdm==4.*",
         "pytest>4,<8",
         "pytest-mock==3.*",
+        "shapely==2.*",
+        "scipy==1.*",
+        "freezegun==1.*",
     ],
 )
