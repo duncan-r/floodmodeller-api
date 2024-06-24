@@ -16,7 +16,6 @@ address: Jacobs UK Limited, Flood Modeller, Cottons Centre, Cottons Lane, London
 
 from __future__ import annotations
 
-import datetime as dt
 import io
 import os
 import time
@@ -30,7 +29,8 @@ from lxml import etree
 
 from floodmodeller_api._base import FMFile
 
-from .logs import error_2d_dict, lf_factory
+from .logs import LF2, create_lf, error_2d_dict
+from .util import handle_exception
 from .xml2d_template import xml2d_template
 
 
@@ -70,19 +70,16 @@ class XML2D(FMFile):
     OLD_FILE = 5
     GOOD_EXIT_CODE = 100
 
+    @handle_exception(when="read")
     def __init__(self, xml_filepath: str | Path | None = None, from_json: bool = False):
-        try:
-            if from_json:
-                return
-            if xml_filepath is not None:
-                FMFile.__init__(self, xml_filepath)
-                self._read()
-                self._log_path = self._filepath.with_suffix(".lf2")
-            else:
-                self._read(from_blank=True)
-
-        except Exception as e:
-            self._handle_exception(e, when="read")
+        if from_json:
+            return
+        if xml_filepath is not None:
+            FMFile.__init__(self, xml_filepath)
+            self._read()
+            self._log_path = self._filepath.with_suffix(".lf2")
+        else:
+            self._read(from_blank=True)
 
     def _read(self, from_blank=False):
         # Read xml data
@@ -387,26 +384,21 @@ class XML2D(FMFile):
                     except AttributeError:
                         self._data[attr] = None
 
+    @handle_exception(when="write")
     def _write(self) -> str:
-        orig_xml_tree = deepcopy(self._xmltree)
+        self._update_dict()
+        self._recursive_update_xml(self._data, self._raw_data, "ROOT")
+        self._recursive_remove_data_xml(self._data, self._xmltree.getroot())
+        etree.indent(self._xmltree, space="    ")
         try:
-            self._update_dict()
-            self._recursive_update_xml(self._data, self._raw_data, "ROOT")
-            self._recursive_remove_data_xml(self._data, self._xmltree.getroot())
-            etree.indent(self._xmltree, space="    ")
-            try:
-                self._validate()
-            except Exception:
-                self._recursive_reorder_xml()
-                self._validate()
+            self._validate()
+        except Exception:
+            self._recursive_reorder_xml()
+            self._validate()
 
-            self._raw_data = deepcopy(self._data)  # reset raw data to equal data
+        self._raw_data = deepcopy(self._data)  # reset raw data to equal data
 
-            return f'<?xml version="1.0" standalone="yes"?>\n{etree.tostring(self._xmltree.getroot()).decode()}'
-
-        except Exception as e:
-            self._xmltree = orig_xml_tree
-            self._handle_exception(e, when="write")
+        return f'<?xml version="1.0" standalone="yes"?>\n{etree.tostring(self._xmltree.getroot()).decode()}'
 
     def _get_multi_value_keys(self):
         self._multi_value_keys = []
@@ -460,126 +452,123 @@ class XML2D(FMFile):
         self._read()
         self._log_path = self._filepath.with_suffix(".lf2")
 
+    # @handle_exception(when="simulate")
     # def simulate(  # noqa: C901, PLR0912, PLR0913
-        # self,
-        # method: str = "WAIT",
-        # raise_on_failure: bool = True,
-        # precision: str = "DEFAULT",
-        # enginespath: str = "",
-        # console_output: str = "simple",
-        # range_function: Callable = trange,
-        # range_settings: dict | None = None,
+    #     self,
+    #     method: str = "WAIT",
+    #     raise_on_failure: bool = True,
+    #     precision: str = "DEFAULT",
+    #     enginespath: str = "",
+    #     console_output: str = "simple",
+    #     range_function: Callable = trange,
+    #     range_settings: dict | None = None,
     # ) -> Popen | None:
-        # """Simulate the XML2D file directly as a subprocess.
-
-        # Args:
-            # method (str, optional): {'WAIT'} | 'RETURN_PROCESS'
-                # 'WAIT' - The function waits for the simulation to complete before continuing (This is default)
-                # 'RETURN_PROCESS' - The function sets the simulation running in background and immediately continues, whilst returning the process object.
-                # Defaults to 'WAIT'.
-            # raise_on_failure (bool, optional): If True, an exception will be raised if the simulation fails to complete without errors.
-                # If set to False, then the script will continue to run even if the simulation fails. If 'method' is set to 'RETURN_PROCESS'
-                # then this argument is ignored. Defaults to True.
-            # precision (str, optional): {'DEFAULT'} | 'SINGLE' | 'DOUBLE'
-                # Define which engine to use for simulation, if set to 'DEFAULT' it will use the precision specified in the IEF. Alternatively,
-                # this can be overwritten using 'SINGLE' or 'DOUBLE'.
-            # enginespath (str, optional): {''} | '/absolute/path/to/engine/executables'
-                # Define where the engine executables are located. This replaces the default location (usual installation folder) if set to
-                # anything other than ''.
-            # console_output (str, optional): {'simple'} | 'standard' | 'detailed'
-                # 'simple' - A simple progress bar for the simulation is presented in the console
-                # 'standard' - The standard Flood Modeller 2D output is presented in the console
-                # 'detailed' - The most detailed Flood Modeller 2D output is presented in the console
-                # Defaults to 'WAIT'.
-
-
-        # Raises:
-            # UserWarning: Raised if ief filepath not already specified
-
-        # Returns:
-            # subprocess.Popen(): If method == 'RETURN_PROCESS', the Popen() instance of the process is returned.
-
-        # """
-
-        # # TODO:
-        # # - Clean up the lf code?
-        # # - Remove or sort out get results
-
-        # self.range_function = range_function
-        # self.range_settings = range_settings if range_settings else {}
-
-        # try:
-            # if self._filepath is None:
-                # raise UserWarning(
-                    # "xml2D must be saved to a specific filepath before simulate() can be called.",
-                # )
-            # if precision.upper() == "DEFAULT":
-                # precision = "SINGLE"  # defaults to single precision
-                # for _, domain in self.domains.items():
-                    # if domain["run_data"].get("double_precision") == "required":
-                        # precision = "DOUBLE"
-                        # break
-
-            # if enginespath == "":
-                # # Default location
-                # _enginespath = r"C:\Program Files\Flood Modeller\bin"
-            # else:
-                # _enginespath = enginespath
-                # if not Path(_enginespath).exists():
-                    # raise Exception(
-                        # f"Flood Modeller non-default engine path not found! {str(_enginespath)}",
-                    # )
-
-            # # checking if all schemes used are fast, if so will use FAST.exe
-            # # TODO: Add in option to choose to use or not to use if you can
-            # is_fast = True
-            # for _, domain in self.domains.items():
-                # if domain["run_data"]["scheme"] != "FAST":
-                    # is_fast = False
-                    # break
-
-            # if is_fast is True:
-                # isis2d_fp = str(Path(_enginespath, "FAST.exe"))
-            # elif precision.upper() == "SINGLE":
-                # isis2d_fp = str(Path(_enginespath, "ISIS2d.exe"))
-            # else:
-                # isis2d_fp = str(Path(_enginespath, "ISIS2d_DP.exe"))
-
-            # if not Path(isis2d_fp).exists():
-                # raise Exception(f"Flood Modeller engine not found! Expected location: {isis2d_fp}")
-
-            # console_output = console_output.lower()
-            # run_command = (
-                # f'"{isis2d_fp}" {"-q" if console_output != "detailed" else ""} "{self._filepath}"'
-            # )
-            # stdout = DEVNULL if console_output == "simple" else None
-
-            # if method.upper() == "WAIT":
-                # print("Executing simulation ... ")
-                # # execute simulation
-                # process = Popen(run_command, cwd=os.path.dirname(self._filepath), stdout=stdout)
-
-                # # progress bar based on log files:
-                # if console_output == "simple":
-                    # self._init_log_file()
-                    # self._update_progress_bar(process)
-
-                # while process.poll() is None:
-                    # # process is still running
-                    # time.sleep(1)
-
-                # exitcode = process.returncode
-                # self._interpret_exit_code(exitcode, raise_on_failure)
-
-            # elif method.upper() == "RETURN_PROCESS":
-                # print("Executing simulation ...")
-                # # execute simulation
-                # return Popen(run_command, cwd=os.path.dirname(self._filepath), stdout=stdout)
-
-            # return None
-
-        # except Exception as e:
-            # self._handle_exception(e, when="simulate")
+    #     """Simulate the XML2D file directly as a subprocess.
+    #
+    #     Args:
+    #         method (str, optional): {'WAIT'} | 'RETURN_PROCESS'
+    #             'WAIT' - The function waits for the simulation to complete before continuing (This is default)
+    #             'RETURN_PROCESS' - The function sets the simulation running in background and immediately continues, whilst returning the process object.
+    #             Defaults to 'WAIT'.
+    #         raise_on_failure (bool, optional): If True, an exception will be raised if the simulation fails to complete without errors.
+    #             If set to False, then the script will continue to run even if the simulation fails. If 'method' is set to 'RETURN_PROCESS'
+    #             then this argument is ignored. Defaults to True.
+    #         precision (str, optional): {'DEFAULT'} | 'SINGLE' | 'DOUBLE'
+    #             Define which engine to use for simulation, if set to 'DEFAULT' it will use the precision specified in the IEF. Alternatively,
+    #             this can be overwritten using 'SINGLE' or 'DOUBLE'.
+    #         enginespath (str, optional): {''} | '/absolute/path/to/engine/executables'
+    #             Define where the engine executables are located. This replaces the default location (usual installation folder) if set to
+    #             anything other than ''.
+    #         console_output (str, optional): {'simple'} | 'standard' | 'detailed'
+    #             'simple' - A simple progress bar for the simulation is presented in the console
+    #             'standard' - The standard Flood Modeller 2D output is presented in the console
+    #             'detailed' - The most detailed Flood Modeller 2D output is presented in the console
+    #             Defaults to 'WAIT'.
+    #
+    #
+    #     Raises:
+    #         UserWarning: Raised if ief filepath not already specified
+    #
+    #     Returns:
+    #         subprocess.Popen(): If method == 'RETURN_PROCESS', the Popen() instance of the process is returned.
+    #
+    #     """
+    #
+    #     # TODO:
+    #     # - Clean up the lf code?
+    #     # - Remove or sort out get results
+    #
+    #     self.range_function = range_function
+    #     self.range_settings = range_settings if range_settings else {}
+    #
+    #     if self._filepath is None:
+    #         raise UserWarning(
+    #             "xml2D must be saved to a specific filepath before simulate() can be called.",
+    #         )
+    #     if precision.upper() == "DEFAULT":
+    #         precision = "SINGLE"  # defaults to single precision
+    #         for _, domain in self.domains.items():
+    #             if domain["run_data"].get("double_precision") == "required":
+    #                 precision = "DOUBLE"
+    #                 break
+    #
+    #     if enginespath == "":
+    #         # Default location
+    #         _enginespath = r"C:\Program Files\Flood Modeller\bin"
+    #     else:
+    #         _enginespath = enginespath
+    #         if not Path(_enginespath).exists():
+    #             raise Exception(
+    #                 f"Flood Modeller non-default engine path not found! {str(_enginespath)}",
+    #             )
+    #
+    #     # checking if all schemes used are fast, if so will use FAST.exe
+    #     # TODO: Add in option to choose to use or not to use if you can
+    #     is_fast = True
+    #     for _, domain in self.domains.items():
+    #         if domain["run_data"]["scheme"] != "FAST":
+    #             is_fast = False
+    #             break
+    #
+    #     if is_fast is True:
+    #         isis2d_fp = str(Path(_enginespath, "FAST.exe"))
+    #     elif precision.upper() == "SINGLE":
+    #         isis2d_fp = str(Path(_enginespath, "ISIS2d.exe"))
+    #     else:
+    #         isis2d_fp = str(Path(_enginespath, "ISIS2d_DP.exe"))
+    #
+    #     if not Path(isis2d_fp).exists():
+    #         raise Exception(f"Flood Modeller engine not found! Expected location: {isis2d_fp}")
+    #
+    #     console_output = console_output.lower()
+    #     run_command = (
+    #         f'"{isis2d_fp}" {"-q" if console_output != "detailed" else ""} "{self._filepath}"'
+    #     )
+    #     stdout = DEVNULL if console_output == "simple" else None
+    #
+    #     if method.upper() == "WAIT":
+    #         print("Executing simulation ... ")
+    #         # execute simulation
+    #         process = Popen(run_command, cwd=os.path.dirname(self._filepath), stdout=stdout)
+    #
+    #         # progress bar based on log files:
+    #         if console_output == "simple":
+    #             self._lf = create_lf(self._log_path, "lf2")
+    #             self._update_progress_bar(process)
+    #
+    #         while process.poll() is None:
+    #             # process is still running
+    #             time.sleep(1)
+    #
+    #         exitcode = process.returncode
+    #         self._interpret_exit_code(exitcode, raise_on_failure)
+    #
+    #     elif method.upper() == "RETURN_PROCESS":
+    #         print("Executing simulation ...")
+    #         # execute simulation
+    #         return Popen(run_command, cwd=os.path.dirname(self._filepath), stdout=stdout)
+    #
+    #     return None
 
     def get_log(self):
         """If log files for the simulation exist, this function returns them as a LF2 class object
@@ -590,84 +579,39 @@ class XML2D(FMFile):
         if not self._log_path.exists():
             raise FileNotFoundError("Log file (LF2) not found")
 
-        return lf_factory(self._log_path, "lf2", False)
-
-    def _init_log_file(self):
-        """Checks for a new log file, waiting for its creation if necessary"""
-        # wait for log file to exist
-        log_file_exists = False
-        max_time = time.time() + 10
-
-        while not log_file_exists:
-            time.sleep(0.1)
-            log_file_exists = self._log_path.is_file()
-
-            # timeout
-            if time.time() > max_time:
-                self._no_log_file("log file is expected but not detected")
-                self._lf = None
-                return
-
-        # wait for new log file
-        old_log_file = True
-        max_time = time.time() + 10
-
-        while old_log_file:
-            time.sleep(0.1)
-
-            # difference between now and when log file was last modified
-            last_modified_timestamp = self._log_path.stat().st_mtime
-            last_modified = dt.datetime.fromtimestamp(last_modified_timestamp)
-            time_diff_sec = (dt.datetime.now() - last_modified).total_seconds()
-
-            # it's old if it's over self.OLD_FILE seconds old (TODO: is this robust?)
-            old_log_file = time_diff_sec > self.OLD_FILE
-
-            # timeout
-            if time.time() > max_time:
-                self._no_log_file("log file is from previous run")
-                self._lf = None
-                return
-
-        # create LF instance
-        self._lf = lf_factory(self._log_path, "lf2", False)
-
-    def _no_log_file(self, reason):
-        """Warning that there will be no progress bar"""
-
-        print("No progress bar as " + reason + ". Simulation will continue as usual.")
+        return LF2(self._log_path)
 
     # def _update_progress_bar(self, process: Popen):
-        # """Updates progress bar based on log file"""
-
-        # # only if there is a log file
-        # if self._lf is None:
-            # return
-
-        # # tqdm progress bar
-        # for i in self.range_function(100, **self.range_settings):
-            # # Process still running
-            # while process.poll() is None:
-                # time.sleep(0.1)
-
-                # # Find progress
-                # self._lf.read(suppress_final_step=True)
-                # progress = self._lf.report_progress()
-
-                # # Reached i% progress => move onto waiting for (i+1)%
-                # if progress > i:
-                    # break
-
-            # # Process stopped
-            # if process.poll() is not None:
-                # # Find final progress
-                # self._lf.read(suppress_final_step=True)
-                # progress = self._lf.report_progress()
-
-                # if progress > i:
-                    # pass  # stopped because it completed
-                # else:
-                    # break  # stopped for another reason
+    #     """Updates progress bar based on log file"""
+    #
+    #     # only if there is a log file
+    #     if self._lf is None:
+    #         return
+    #
+    #     # tqdm progress bar
+    #     for i in self.range_function(100, **self.range_settings):
+    #         # Process still running
+    #         while process.poll() is None:
+    #             time.sleep(0.1)
+    #
+    #             # Find progress
+    #             self._lf.read(suppress_final_step=True)
+    #             progress = self._lf.report_progress()
+    #
+    #             # Reached i% progress => move onto waiting for (i+1)%
+    #             if progress > i:
+    #                 break
+    #
+    #         # Process stopped
+    #         if process.poll() is not None:
+    #             # Find final progress
+    #             self._lf.read(suppress_final_step=True)
+    #             progress = self._lf.report_progress()
+    #
+    #             if progress > i:
+    #                 pass  # stopped because it completed
+    #             else:
+    #                 break  # stopped for another reason
 
     def _interpret_exit_code(self, exitcode: int, raise_on_failure: bool):
         """This function will interpret the exit code and tell us if this is good or bad
